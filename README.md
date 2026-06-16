@@ -1,4 +1,29 @@
-# AI Study Buddy
+<div align="center">
+  <img src="assets/images/icon.png" alt="AI Study Buddy app icon" width="120" height="120" />
+  <h1>AI Study Buddy</h1>
+  <p>
+    <strong>A mobile-first AI study workspace for PDF-grounded learning, chat, and conversation history.</strong>
+  </p>
+  <p>
+    <img alt="Expo SDK 56" src="https://img.shields.io/badge/Expo%20SDK-56-000020?style=for-the-badge&logo=expo&logoColor=white" />
+    <img alt="React Native 0.85.3" src="https://img.shields.io/badge/React%20Native-0.85.3-61DAFB?style=for-the-badge&logo=react&logoColor=111111" />
+    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
+    <img alt="Firebase Auth" src="https://img.shields.io/badge/Firebase-Auth-FFCA28?style=for-the-badge&logo=firebase&logoColor=111111" />
+  </p>
+  <p>
+    <a href="#what-it-does">Features</a>
+    |
+    <a href="#product-flow">Flow</a>
+    |
+    <a href="#tech-stack">Tech Stack</a>
+    |
+    <a href="#backend-contract">Backend</a>
+    |
+    <a href="#getting-started">Run Locally</a>
+  </p>
+</div>
+
+---
 
 AI Study Buddy is a mobile-first Expo app that turns study material into a guided chat workspace. Students sign in with Google, upload PDF notes or documents, ask questions, and keep conversations organized so every study session can pick up where the last one ended.
 
