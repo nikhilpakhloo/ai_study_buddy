@@ -2,44 +2,57 @@ import { getAuth, signOut } from "@react-native-firebase/auth";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { APP_STRINGS } from "@/constants/strings";
 import { ROUTES } from "@/constants/routes";
 import { COLORS, LAYOUT, RADII, SPACING, TYPOGRAPHY } from "@/constants/theme";
-import { useChatComposer } from "@/providers/chat-composer-provider";
-import { getCurrentUser, type AppUser } from "@/services/user";
-
-const CONVERSATIONS = APP_STRINGS.drawer.conversations;
+import {
+  useConversationsQuery,
+  useCreateConversationMutation,
+} from "@/services/chat-queries";
+import { useCurrentUserQuery } from "@/services/user-queries";
+import { useChatStore } from "@/stores/chat-store";
 
 export function AppDrawerContent() {
-  const { startNewChat } = useChatComposer();
+  const resetChatDraft = useChatStore((state) => state.resetChatDraft);
+  const setConversationId = useChatStore((state) => state.setConversationId);
   const firebaseUser = getAuth().currentUser;
-  const [user, setUser] = useState<AppUser | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    getCurrentUser()
-      .then((currentUser) => {
-        if (isMounted) {
-          setUser(currentUser);
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const createConversationMutation = useCreateConversationMutation();
+  const { data: conversations = [], isLoading: isLoadingConversations } =
+    useConversationsQuery();
+  const { data: user } = useCurrentUserQuery();
 
   const name = user?.name ?? firebaseUser?.displayName ?? APP_STRINGS.home.defaultName;
   const photoURL = user?.photoURL ?? firebaseUser?.photoURL;
 
-  const handleNewChat = () => {
-    startNewChat();
+  const handleNewChat = async () => {
+    try {
+      const title = APP_STRINGS.chat.defaultConversationTitle;
+      const conversationId = await createConversationMutation.mutateAsync(title);
+      resetChatDraft();
+      setConversationId(conversationId);
+      router.replace(ROUTES.home);
+    } catch (error) {
+      Alert.alert(
+        APP_STRINGS.drawer.newChatErrorTitle,
+        error instanceof Error ? error.message : APP_STRINGS.drawer.newChatErrorMessage,
+      );
+    }
+  };
+
+  const handleOpenConversation = (conversationId: string) => {
+    resetChatDraft();
+    setConversationId(conversationId);
     router.replace(ROUTES.home);
   };
 
@@ -78,24 +91,33 @@ export function AppDrawerContent() {
       >
         <Text style={styles.sectionTitle}>{APP_STRINGS.drawer.history}</Text>
         <View style={styles.historyList}>
-          {CONVERSATIONS.map((conversation) => (
-            <Pressable
-              accessibilityRole="button"
-              key={conversation}
-              style={({ pressed }) => [styles.historyItem, pressed && styles.historyItemPressed]}
-            >
-              <View style={styles.historyIcon}>
-                <SymbolView
-                  name={APP_STRINGS.symbols.chat}
-                  size={LAYOUT.drawerHistoryIconSize}
-                  tintColor={COLORS.textSecondary}
-                />
-              </View>
-              <Text numberOfLines={1} style={styles.historyText}>
-                {conversation}
-              </Text>
-            </Pressable>
-          ))}
+          {isLoadingConversations ? (
+            <View style={styles.historyState}>
+              <ActivityIndicator color={COLORS.primary} />
+            </View>
+          ) : conversations.length > 0 ? (
+            conversations.map((conversation) => (
+              <Pressable
+                accessibilityRole="button"
+                key={conversation.id}
+                onPress={() => handleOpenConversation(conversation.id)}
+                style={({ pressed }) => [styles.historyItem, pressed && styles.historyItemPressed]}
+              >
+                <View style={styles.historyIcon}>
+                  <SymbolView
+                    name={APP_STRINGS.symbols.chat}
+                    size={LAYOUT.drawerHistoryIconSize}
+                    tintColor={COLORS.textSecondary}
+                  />
+                </View>
+                <Text numberOfLines={1} style={styles.historyText}>
+                  {conversation.title}
+                </Text>
+              </Pressable>
+            ))
+          ) : (
+            <Text style={styles.emptyHistoryText}>{APP_STRINGS.drawer.emptyHistory}</Text>
+          )}
         </View>
       </ScrollView>
 
@@ -103,15 +125,26 @@ export function AppDrawerContent() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={APP_STRINGS.chat.newChatAccessibilityLabel}
+          disabled={createConversationMutation.isPending}
           onPress={handleNewChat}
-          style={({ pressed }) => [styles.newChatButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.newChatButton,
+            createConversationMutation.isPending && styles.newChatButtonLoading,
+            pressed && !createConversationMutation.isPending && styles.pressed,
+          ]}
         >
-          <SymbolView
-            name={APP_STRINGS.symbols.newChat}
-            size={LAYOUT.drawerActionIconSize}
-            tintColor={COLORS.surface}
-          />
-          <Text style={styles.newChatText}>{APP_STRINGS.drawer.newChat}</Text>
+          {createConversationMutation.isPending ? (
+            <ActivityIndicator color={COLORS.surface} />
+          ) : (
+            <>
+              <SymbolView
+                name={APP_STRINGS.symbols.newChat}
+                size={LAYOUT.drawerActionIconSize}
+                tintColor={COLORS.surface}
+              />
+              <Text style={styles.newChatText}>{APP_STRINGS.drawer.newChat}</Text>
+            </>
+          )}
         </Pressable>
       </View>
     </SafeAreaView>
@@ -168,6 +201,11 @@ const styles = StyleSheet.create({
   },
   historyScroll: { flex: LAYOUT.flex },
   historyContent: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.lg },
+  historyState: {
+    minHeight: LAYOUT.drawerHistoryHeight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   sectionTitle: {
     marginTop: SPACING.lg,
     marginBottom: SPACING.sm,
@@ -197,6 +235,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   historyText: { flex: LAYOUT.flex, color: COLORS.textPrimary, fontSize: TYPOGRAPHY.feature },
+  emptyHistoryText: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.md,
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.feature,
+  },
   drawerFooter: {
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,
@@ -214,6 +258,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     backgroundColor: COLORS.primary,
   },
+  newChatButtonLoading: { opacity: LAYOUT.loadingOpacity },
   newChatText: { color: COLORS.surface, fontSize: TYPOGRAPHY.button, fontWeight: "700" },
   pressed: { opacity: LAYOUT.pressedOpacity },
 });

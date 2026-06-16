@@ -11,7 +11,7 @@ import {
   isSuccessResponse,
 } from "react-native-nitro-google-signin";
 
-import { publicApiClient } from "@/api/client";
+import { publicApiClient, setApiBearerToken } from "@/api/client";
 import { API_ENDPOINTS } from "@/api/endpoints";
 import { APP_STRINGS } from "@/constants/strings";
 
@@ -31,16 +31,21 @@ export async function signInWithGoogle(): Promise<void> {
   }
 
   const googleCredential = GoogleAuthProvider.credential(response.data.idToken);
-  console.log("idtoken", googleCredential);
   const auth = getAuth();
   const userCredential = await signInWithCredential(auth, googleCredential);
 
   try {
     const firebaseIdToken = await getIdToken(userCredential.user);
-    console.log("FirebaseIdtoken", firebaseIdToken);
-    await publicApiClient.post(API_ENDPOINTS.auth.socialLogin, {
-      idToken: firebaseIdToken,
-    });
+    setApiBearerToken(firebaseIdToken);
+    await publicApiClient.post(
+      API_ENDPOINTS.auth.socialLogin,
+      {
+        idToken: firebaseIdToken,
+      },
+      {
+        headers: { Authorization: `Bearer ${firebaseIdToken}` },
+      },
+    );
   } catch (error) {
     await signOut(auth);
     throw error;

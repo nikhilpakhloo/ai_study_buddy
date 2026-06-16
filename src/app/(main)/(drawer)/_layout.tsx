@@ -3,11 +3,9 @@ import { Drawer } from "expo-router/drawer";
 import { AppDrawerContent } from "@/components/AppDrawerContent";
 import { APP_STRINGS } from "@/constants/strings";
 import { COLORS } from "@/constants/theme";
-import { ChatComposerProvider } from "@/providers/chat-composer-provider";
 
 export default function Layout() {
   return (
-    <ChatComposerProvider>
     <Drawer
       drawerContent={() => <AppDrawerContent />}
       screenOptions={{
@@ -26,6 +24,5 @@ export default function Layout() {
         }}
       />
     </Drawer>
-    </ChatComposerProvider>
   );
 }

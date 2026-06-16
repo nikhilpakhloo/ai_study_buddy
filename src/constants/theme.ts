@@ -47,7 +47,6 @@ export const TYPOGRAPHY = {
   legal: 12,
   letterSpacing: 1.2,
   drawerBrand: 18,
-  suggestionLineHeight: 19,
 } as const;
 
 export const LAYOUT = {
@@ -81,8 +80,6 @@ export const LAYOUT = {
   chatDescriptionWidth: 430,
   chatContentWidth: 620,
   composerMaxWidth: 720,
-  chatSuggestionMinWidth: 150,
-  chatSuggestionWidth: 190,
   composerMinHeight: 58,
   composerMaxHeight: 160,
   composerInputMaxHeight: 120,

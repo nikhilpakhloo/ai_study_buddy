@@ -4,10 +4,11 @@ export const API_ENDPOINTS = {
     me: "auth/me",
   },
   home: {
-    createCoversation: "chat/conversation",
-    getCoversation: "chat/conversations",
+    createConversation: "chat/conversation",
+    getConversations: "chat/conversations",
     sendMessages: "chat/message",
-    getMessagesByCoversation:
-      "chat/conversation/6a303f3b8ad0cf991fb3fe5e/messages",
+    getMessagesByConversation: (conversationId: string) =>
+      `chat/conversation/${conversationId}/messages`,
+    upload: "documents/upload",
   },
 } as const;

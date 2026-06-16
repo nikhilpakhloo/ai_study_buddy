@@ -1,5 +1,10 @@
+import {
+  QueryClient,
+  QueryClientProvider
+} from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 import { COLORS } from "@/constants/theme";
@@ -38,11 +43,26 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: 1,
+            refetchOnMount: "always",
+            refetchOnReconnect: true,
+          },
+        },
+      }),
+  );
+
   return (
-    <AuthSessionProvider>
-      <StatusBar style="dark" />
-      <RootNavigator />
-    </AuthSessionProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthSessionProvider>
+        <StatusBar style="dark" />
+        <RootNavigator />
+      </AuthSessionProvider>
+    </QueryClientProvider>
   );
 }
 
