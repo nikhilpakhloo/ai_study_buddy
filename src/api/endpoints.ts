@@ -7,6 +7,8 @@ export const API_ENDPOINTS = {
     createConversation: "chat/conversation",
     getConversations: "chat/conversations",
     sendMessages: "chat/message",
+    streamMessage: "chat/stream",
+    askRag: "chat/ask-rag",
     getMessagesByConversation: (conversationId: string) =>
       `chat/conversation/${conversationId}/messages`,
     upload: "documents/upload",

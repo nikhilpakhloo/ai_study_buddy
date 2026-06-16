@@ -7,6 +7,7 @@ import {
   sendChatMessage,
   uploadDocument,
   type Conversation,
+  type ConversationMessage,
 } from "@/services/chat";
 
 export const chatQueryKeys = {
@@ -50,7 +51,20 @@ export function useSendChatMessageMutation() {
 
   return useMutation({
     mutationFn: sendChatMessage,
-    onSuccess: (_data, variables) => {
+    onSuccess: (assistantMessages, variables) => {
+      queryClient.setQueryData<ConversationMessage[]>(
+        chatQueryKeys.messages(variables.conversationId),
+        (currentMessages = []) => [
+          ...currentMessages,
+          {
+            documentName: null,
+            id: `user-${Date.now()}`,
+            role: "user",
+            text: variables.message,
+          },
+          ...assistantMessages,
+        ],
+      );
       queryClient.invalidateQueries({
         queryKey: chatQueryKeys.messages(variables.conversationId),
       });

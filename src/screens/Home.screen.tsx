@@ -1,6 +1,6 @@
 import * as DocumentPicker from "expo-document-picker";
 import { SymbolView } from "expo-symbols";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -29,6 +29,10 @@ import {
 } from "@/services/chat-queries";
 import { useChatStore } from "@/stores/chat-store";
 
+type VisibleConversationMessage = ConversationMessage & {
+  canRemoveDocument?: boolean;
+};
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -37,8 +41,30 @@ function getErrorMessage(error: unknown) {
   return APP_STRINGS.chat.sendErrorMessage;
 }
 
+function getDisplayText(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const message = value as Record<string, unknown>;
+
+  return (
+    getDisplayText(message.text) ||
+    getDisplayText(message.content) ||
+    getDisplayText(message.message) ||
+    getDisplayText(message.reply) ||
+    getDisplayText(message.answer) ||
+    getDisplayText(message.response)
+  );
+}
+
 export default function HomeScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
+  const [isPickingDocument, setIsPickingDocument] = useState(false);
   const chatBubbles = useChatStore((state) => state.chatBubbles);
   const conversationId = useChatStore((state) => state.conversationId);
   const document = useChatStore((state) => state.document);
@@ -56,15 +82,25 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
   const serverMessages = conversationMessagesQuery.data ?? [];
+  const visibleServerMessages = serverMessages.map<VisibleConversationMessage>(
+    (bubble) => ({ ...bubble }),
+  );
+  const uploadedDocumentMessages = chatBubbles
+    .filter((bubble) => bubble.document)
+    .map<VisibleConversationMessage>((bubble) => ({
+      canRemoveDocument: true,
+      documentName: bubble.document?.name ?? null,
+      id: bubble.id,
+      role: "user",
+      text: bubble.text || bubble.document?.name || "",
+    }));
   const visibleMessages =
-    serverMessages.length > 0
-      ? serverMessages
-      : chatBubbles.map<ConversationMessage>((bubble) => ({
-          documentName: bubble.document?.name ?? null,
-          id: bubble.id,
-          role: "user",
-          text: bubble.text,
-        }));
+    (visibleServerMessages.length > 0
+      ? [...visibleServerMessages, ...uploadedDocumentMessages]
+      : uploadedDocumentMessages).map((bubble) => ({
+        ...bubble,
+        text: getDisplayText(bubble.text),
+      }));
   const trimmedMessage = message.trim();
   const isSending =
     createConversationMutation.isPending ||
@@ -81,6 +117,15 @@ export default function HomeScreen() {
     });
   }, []);
 
+  const handleRemoveUploadedDocument = useCallback(
+    (documentMessageId: string) => {
+      setChatBubbles((currentBubbles) =>
+        currentBubbles.filter((bubble) => bubble.id !== documentMessageId),
+      );
+    },
+    [setChatBubbles],
+  );
+
   useEffect(() => {
     if (visibleMessages.length > 0 && !conversationMessagesQuery.isLoading) {
       scrollToLatestMessage();
@@ -92,24 +137,36 @@ export default function HomeScreen() {
   ]);
 
   const handlePickDocument = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: [...APP_STRINGS.chat.acceptedDocumentTypes],
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
+    if (isPickingDocument) {
+      return;
+    }
 
-    if (!result.canceled) {
-      const selectedDocument = result.assets[0];
+    setIsPickingDocument(true);
 
-      if (selectedDocument.mimeType !== "application/pdf") {
-        Alert.alert(
-          APP_STRINGS.chat.sendErrorTitle,
-          APP_STRINGS.chat.uploadErrorMessage,
-        );
-        return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [...APP_STRINGS.chat.acceptedDocumentTypes],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (!result.canceled) {
+        const selectedDocument = result.assets[0];
+
+        if (selectedDocument.mimeType !== "application/pdf") {
+          Alert.alert(
+            APP_STRINGS.chat.sendErrorTitle,
+            APP_STRINGS.chat.uploadErrorMessage,
+          );
+          return;
+        }
+
+        setDocument(selectedDocument);
       }
-
-      setDocument(selectedDocument);
+    } catch (error) {
+      console.log("[pickDocument] failed", error);
+    } finally {
+      setIsPickingDocument(false);
     }
   };
 
@@ -146,6 +203,14 @@ export default function HomeScreen() {
           uri: document.uri,
         });
         await uploadDocumentMutation.mutateAsync({ document });
+        setChatBubbles((currentBubbles) => [
+          ...currentBubbles,
+          {
+            id: `document-${Date.now()}`,
+            document,
+            text: document.name,
+          },
+        ]);
       }
 
       if (trimmedMessage) {
@@ -158,14 +223,6 @@ export default function HomeScreen() {
         });
       }
 
-      setChatBubbles((currentBubbles) => [
-        ...currentBubbles,
-        {
-          id: `${Date.now()}`,
-          document,
-          text: trimmedMessage,
-        },
-      ]);
       setMessage("");
       setDocument(null);
       scrollToLatestMessage();
@@ -210,18 +267,41 @@ export default function HomeScreen() {
                   ]}
                 >
                   {bubble.documentName ? (
-                    <View style={styles.bubbleDocument}>
-                      <SymbolView
-                        name={APP_STRINGS.symbols.document}
-                        size={LAYOUT.composerIconSize}
-                        tintColor={COLORS.primaryDark}
-                      />
-                      <Text numberOfLines={1} style={styles.bubbleDocumentName}>
-                        {bubble.documentName}
-                      </Text>
+                    <View style={styles.attachmentCard}>
+                      <View style={styles.attachmentIcon}>
+                        <SymbolView
+                          name={APP_STRINGS.symbols.document}
+                          size={LAYOUT.composerIconSize}
+                          tintColor={COLORS.primary}
+                        />
+                      </View>
+                      <View style={styles.attachmentText}>
+                        <Text numberOfLines={1} style={styles.attachmentName}>
+                          {bubble.documentName}
+                        </Text>
+                        <Text style={styles.attachmentMeta}>PDF</Text>
+                      </View>
+                      {bubble.canRemoveDocument ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Remove uploaded document"
+                          hitSlop={SPACING.sm}
+                          onPress={() => handleRemoveUploadedDocument(bubble.id)}
+                          style={({ pressed }) => [
+                            styles.attachmentRemove,
+                            pressed && styles.pressed,
+                          ]}
+                        >
+                          <SymbolView
+                            name={APP_STRINGS.symbols.close}
+                            size={LAYOUT.composerSmallIconSize}
+                            tintColor={COLORS.textSecondary}
+                          />
+                        </Pressable>
+                      ) : null}
                     </View>
                   ) : null}
-                  {bubble.text ? (
+                  {bubble.text && bubble.text !== bubble.documentName ? (
                     <Text
                       style={[
                         styles.messageBubbleText,
@@ -287,9 +367,11 @@ export default function HomeScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={APP_STRINGS.chat.uploadAccessibilityLabel}
+                disabled={isPickingDocument}
                 onPress={handlePickDocument}
                 style={({ pressed }) => [
                   styles.composerAction,
+                  isPickingDocument && styles.composerActionDisabled,
                   pressed && styles.pressed,
                 ]}
               >
@@ -397,20 +479,46 @@ const styles = StyleSheet.create({
   userBubbleText: {
     color: COLORS.surface,
   },
-  bubbleDocument: {
-    minHeight: LAYOUT.drawerHistoryIconContainer,
+  attachmentCard: {
+    width: "100%",
+    minHeight: LAYOUT.drawerHistoryHeight,
     borderRadius: RADII.md,
     paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
     flexDirection: "row",
     alignItems: "center",
     gap: SPACING.sm,
+    backgroundColor: COLORS.surface,
+  },
+  attachmentIcon: {
+    width: LAYOUT.drawerHistoryIconContainer,
+    height: LAYOUT.drawerHistoryIconContainer,
+    borderRadius: RADII.md,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: COLORS.primarySoft,
   },
-  bubbleDocumentName: {
+  attachmentText: {
     flex: LAYOUT.flex,
-    color: COLORS.primaryDark,
+    minWidth: 0,
+  },
+  attachmentName: {
+    color: COLORS.textPrimary,
     fontSize: TYPOGRAPHY.feature,
-    fontWeight: "600",
+    fontWeight: "700",
+  },
+  attachmentMeta: {
+    marginTop: SPACING.xs,
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.legal,
+    fontWeight: "700",
+  },
+  attachmentRemove: {
+    width: LAYOUT.drawerHeaderActionSize,
+    height: LAYOUT.drawerHeaderActionSize,
+    borderRadius: RADII.pill,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyState: {
     width: "100%",
@@ -495,6 +603,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: COLORS.primarySoft,
   },
+  composerActionDisabled: { opacity: LAYOUT.loadingOpacity },
   input: {
     flex: LAYOUT.flex,
     minHeight: LAYOUT.composerActionSize,

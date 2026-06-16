@@ -30,7 +30,9 @@ type GetConversationsResponse =
 type ApiMessage = {
   _id?: string;
   id?: string;
-  content?: string;
+  answer?: unknown;
+  assistantReply?: unknown;
+  content?: unknown;
   document?: {
     name?: string;
     originalName?: string;
@@ -41,11 +43,13 @@ type ApiMessage = {
     originalName?: string;
     fileName?: string;
   };
-  message?: string;
+  message?: unknown;
+  reply?: unknown;
+  response?: unknown;
   role?: string;
   sender?: string;
-  text?: string;
-  title?: string;
+  text?: unknown;
+  title?: unknown;
 };
 
 type GetConversationMessagesResponse =
@@ -59,6 +63,20 @@ type UploadErrorResponse = {
   error?: string;
   message?: string;
 };
+
+type SendMessageResponse =
+  | string
+  | ApiMessage[]
+  | {
+      answer?: unknown;
+      assistantMessage?: ApiMessage;
+      assistantReply?: unknown;
+      data?: ApiMessage | ApiMessage[] | string;
+      message?: ApiMessage | string;
+      messages?: ApiMessage[];
+      reply?: unknown;
+      response?: unknown;
+    };
 
 export type Conversation = {
   id: string;
@@ -84,6 +102,149 @@ export type UploadDocumentPayload = {
     uri: string;
   };
 };
+
+function extractMessageText(value: unknown, depth = 0): string | null {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (!value || depth > 2) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const text = extractMessageText(item, depth + 1);
+
+      if (text) {
+        return text;
+      }
+    }
+
+    return null;
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+
+    return (
+      extractMessageText(record.text, depth + 1) ??
+      extractMessageText(record.content, depth + 1) ??
+      extractMessageText(record.message, depth + 1) ??
+      extractMessageText(record.reply, depth + 1) ??
+      extractMessageText(record.answer, depth + 1) ??
+      extractMessageText(record.assistantReply, depth + 1) ??
+      extractMessageText(record.response, depth + 1) ??
+      extractMessageText(record.title, depth + 1)
+    );
+  }
+
+  return null;
+}
+
+function normalizeApiMessage(
+  message: ApiMessage,
+  fallbackId: string,
+  fallbackRole: ConversationMessage["role"] = "user",
+): ConversationMessage {
+  const role = message.role ?? message.sender;
+  const document = message.document ?? message.file;
+
+  return {
+    documentName:
+      document?.name ?? document?.originalName ?? document?.fileName ?? null,
+    id: message._id ?? message.id ?? fallbackId,
+    role: role === "assistant" || role === "user" ? role : fallbackRole,
+    text: extractMessageText(message) ?? "",
+  };
+}
+
+function getResponseMessages(response: SendMessageResponse) {
+  if (typeof response === "string") {
+    return [
+      {
+        documentName: null,
+        id: `assistant-${Date.now()}`,
+        role: "assistant" as const,
+        text: response,
+      },
+    ];
+  }
+
+  if (Array.isArray(response)) {
+    return response
+      .map((message, index) =>
+        normalizeApiMessage(message, `message-${Date.now()}-${index}`),
+      )
+      .filter((message) => message.role === "assistant")
+      .slice(-1);
+  }
+
+  const messageList = Array.isArray(response.messages)
+    ? response.messages
+    : Array.isArray(response.data)
+      ? response.data
+      : null;
+
+  if (messageList) {
+    return messageList
+      .map((message, index) =>
+        normalizeApiMessage(message, `message-${Date.now()}-${index}`),
+      )
+      .filter((message) => message.role === "assistant")
+      .slice(-1);
+  }
+
+  const singleMessage =
+    response.assistantMessage ??
+    (response.reply && typeof response.reply === "object" && !Array.isArray(response.reply)
+      ? response.reply
+      : null) ??
+    (response.answer && typeof response.answer === "object" && !Array.isArray(response.answer)
+      ? response.answer
+      : null) ??
+    (response.assistantReply &&
+    typeof response.assistantReply === "object" &&
+    !Array.isArray(response.assistantReply)
+      ? response.assistantReply
+      : null) ??
+    (response.response &&
+    typeof response.response === "object" &&
+    !Array.isArray(response.response)
+      ? response.response
+      : null) ??
+    (response.data && typeof response.data === "object" && !Array.isArray(response.data)
+      ? response.data
+      : null) ??
+    (response.message && typeof response.message === "object"
+      ? response.message
+      : null);
+
+  if (singleMessage) {
+    return [
+      normalizeApiMessage(singleMessage, `assistant-${Date.now()}`, "assistant"),
+    ];
+  }
+
+  const assistantText =
+    extractMessageText(response.reply) ??
+    extractMessageText(response.answer) ??
+    extractMessageText(response.assistantReply) ??
+    extractMessageText(response.response) ??
+    extractMessageText(response.data) ??
+    extractMessageText(response.message);
+
+  return assistantText
+    ? [
+        {
+          documentName: null,
+          id: `assistant-${Date.now()}`,
+          role: "assistant" as const,
+          text: assistantText,
+        },
+      ]
+    : [];
+}
 
 export async function createConversation(title: string) {
   const response = await apiClient.post<CreateConversationResponse>(
@@ -127,12 +288,12 @@ export async function getConversations() {
 }
 
 export async function sendChatMessage({ conversationId, message }: SendMessagePayload) {
-  const response = await apiClient.post(API_ENDPOINTS.home.sendMessages, {
+  const response = await apiClient.post<SendMessageResponse>(API_ENDPOINTS.home.sendMessages, {
     conversationId,
     message,
   });
 
-  return response.data;
+  return getResponseMessages(response.data);
 }
 
 export async function uploadDocument({ document }: UploadDocumentPayload) {
@@ -212,16 +373,7 @@ export async function getConversationMessages(conversationId: string) {
     ? response.data
     : response.data.messages ?? response.data.data ?? [];
 
-  return messages.map<ConversationMessage>((message, index) => {
-    const role = message.role ?? message.sender;
-    const document = message.document ?? message.file;
-
-    return {
-      documentName:
-        document?.name ?? document?.originalName ?? document?.fileName ?? null,
-      id: message._id ?? message.id ?? `${conversationId}-${index}`,
-      role: role === "assistant" ? "assistant" : "user",
-      text: message.message ?? message.text ?? message.content ?? message.title ?? "",
-    };
-  });
+  return messages.map<ConversationMessage>((message, index) =>
+    normalizeApiMessage(message, `${conversationId}-${index}`),
+  );
 }
