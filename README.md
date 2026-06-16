@@ -1,56 +1,192 @@
-# Welcome to your Expo app 👋
+# AI Study Buddy
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+AI Study Buddy is a mobile-first Expo app that turns study material into a guided chat workspace. Students sign in with Google, upload PDF notes or documents, ask questions, and keep conversations organized so every study session can pick up where the last one ended.
 
-## Get started
+Built with Expo SDK 56, Expo Router, Firebase Auth, TanStack Query, Zustand, and a backend API for authenticated chat, conversation history, and document upload.
 
-1. Install dependencies
+## What It Does
 
-   ```bash
-   npm install
-   ```
+| Area | Functionality |
+| --- | --- |
+| Authentication | Google One Tap sign-in backed by Firebase Auth. |
+| Protected routing | Signed-out users see the welcome flow; signed-in users enter the study workspace. |
+| Study chat | Users can create conversations, send questions, and receive assistant answers. |
+| PDF context | Users can attach one PDF document to ground questions in their own material. |
+| Conversation history | The drawer lists previous conversations and lets users reopen them. |
+| Session state | Draft message, selected document, active conversation, and local bubbles are managed cleanly with Zustand. |
+| Server state | Conversations and messages are cached, refreshed, and invalidated with TanStack Query. |
+| Native feel | Uses Expo symbols, safe areas, keyboard-aware layout, splash screen, adaptive icons, and polished mobile styling. |
 
-2. Start the app
+## Product Flow
 
-   ```bash
-   npx expo start
-   ```
+1. The app starts at `src/app/index.tsx`.
+2. `AuthSessionProvider` listens to Firebase auth state.
+3. Expo Router redirects users:
+   - signed out: `/welcome`
+   - signed in: `/home`
+4. The welcome screen presents the product story and Google sign-in.
+5. After sign-in, the app sends the Firebase ID token to the backend social login endpoint.
+6. The main drawer loads conversation history and user profile data.
+7. The home screen lets users:
+   - upload a PDF
+   - type a study question
+   - create or continue a conversation
+   - send messages to the backend
+   - view assistant replies and previous messages
 
-In the output, you'll find options to open the app in a
+## Tech Stack
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+| Layer | Tools |
+| --- | --- |
+| App runtime | Expo `~56.0.12`, React Native `0.85.3`, React `19.2.3` |
+| Navigation | Expo Router `~56.2.11` with protected stack routes and drawer layout |
+| Authentication | `@react-native-firebase/auth`, `@react-native-firebase/app`, `react-native-nitro-google-signin` |
+| API | Axios for JSON requests, `expo/fetch` plus `expo-file-system` `File` for multipart PDF uploads |
+| Async state | TanStack Query v5 |
+| Local state | Zustand |
+| UI | React Native styles, Expo Symbols, Expo Image, Safe Area Context |
+| Tooling | TypeScript 6, ESLint 9, Expo lint config |
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Project Structure
 
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```text
+src/
+  api/
+    client.ts            # Axios clients, auth header injection, API error normalization
+    endpoints.ts         # Backend route constants
+  app/
+    _layout.tsx          # Root providers, protected navigation, status bar
+    index.tsx            # Auth-aware redirect
+    (auth)/              # Signed-out route group
+    (main)/              # Signed-in route group
+  components/
+    AppDrawerContent.tsx # Profile header, chat history, new chat, sign out
+  constants/
+    routes.ts            # App route constants
+    strings.ts           # Product copy, accessibility labels, symbol names
+    theme.ts             # Colors, spacing, radii, typography, layout tokens
+  hooks/
+    useKeyboard.ts       # Keyboard visibility and height tracking
+  providers/
+    auth-session-provider.tsx
+  screens/
+    Welcome.screen.tsx   # Product welcome and Google sign-in
+    Home.screen.tsx      # Chat, PDF picker, message composer
+  services/
+    chat.ts              # Conversation, message, and document upload API functions
+    chat-queries.ts      # TanStack Query hooks for chat workflows
+    google-auth.ts       # Google One Tap + Firebase credential flow
+    user.ts              # Current user API service
+    user-queries.ts      # Current user query hook
+  stores/
+    chat-store.ts        # Active chat draft and selected conversation state
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Backend Contract
 
-### Other setup steps
+The app expects an authenticated backend at `EXPO_PUBLIC_BASE_URL`.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `auth/social-login` | Registers or syncs the Firebase-authenticated user. |
+| `GET` | `auth/me` | Loads the signed-in user's profile. |
+| `POST` | `chat/conversation` | Creates a new conversation. |
+| `GET` | `chat/conversations` | Lists conversation history. |
+| `GET` | `chat/conversation/:id/messages` | Loads messages for a conversation. |
+| `POST` | `chat/message` | Sends a text question to the assistant. |
+| `POST` | `documents/upload` | Uploads a PDF as multipart form data under the `pdf` field. |
 
-## Learn more
+Authenticated requests include a Firebase ID token:
 
-To learn more about developing your project with Expo, look at the following resources:
+```http
+Authorization: Bearer <firebase-id-token>
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Environment Setup
 
-## Join the community
+Create a local environment file with your backend URL:
 
-Join our community of developers creating universal apps.
+```bash
+EXPO_PUBLIC_BASE_URL=https://your-api.example.com
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Firebase and Google sign-in also require platform configuration:
+
+| Platform | Required setup |
+| --- | --- |
+| Android | Add `google-services.json` at the project root. The app is configured to read `./google-services.json`. |
+| Firebase | Enable Google as a sign-in provider in Firebase Auth. |
+| Google Sign-In | Configure the OAuth clients and SHA fingerprints needed by `react-native-nitro-google-signin`. |
+
+The app currently uses `webClientId: "autoDetect"` in `src/constants/strings.ts`.
+
+## Getting Started
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the Expo dev server:
+
+```bash
+npm start
+```
+
+Run on Android:
+
+```bash
+npm run android
+```
+
+Run on iOS:
+
+```bash
+npm run ios
+```
+
+Run on web:
+
+```bash
+npm run web
+```
+
+Lint the project:
+
+```bash
+npm run lint
+```
+
+## Important Notes
+
+- This project targets Expo SDK 56. The matching Expo versioned docs are at https://docs.expo.dev/versions/v56.0.0/.
+- Native auth dependencies mean Android and iOS development builds are the primary runtime targets.
+- PDF upload accepts `application/pdf` only.
+- The Android config allows cleartext traffic, which is useful for local backend development. Review this before production release.
+- `expo-router` typed routes and React Compiler experiments are enabled in `app.json`.
+
+## App Configuration
+
+| Setting | Value |
+| --- | --- |
+| Expo name | `ai-study-buddy` |
+| Scheme | `aistudybuddy` |
+| Orientation | Portrait |
+| Android package | `com.anonymous.aistudybuddy` |
+| Web output | Static |
+| Splash color | `#6657E8` |
+
+## Why This Project Is Nice to Work On
+
+The codebase keeps product copy, theme tokens, routes, API endpoints, API services, server state, and local UI state separated. That makes it easy to evolve the app one layer at a time:
+
+- update text in `src/constants/strings.ts`
+- tune visual style in `src/constants/theme.ts`
+- add backend routes in `src/api/endpoints.ts`
+- add server workflows in `src/services`
+- extend screens without mixing auth, networking, and state logic together
+
+## License
+
+See [LICENSE](LICENSE).
