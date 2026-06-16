@@ -4,9 +4,13 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~56.0.18",
+    "@react-native-firebase/app": "^24.1.1",
+    "@react-native-firebase/auth": "^24.1.1",
+    "axios": "^1.18.0",
     "expo": "~56.0.12",
     "expo-constants": "~56.0.18",
     "expo-device": "~56.0.4",
+    "expo-document-picker": "~56.0.4",
     "expo-font": "~56.0.7",
     "expo-glass-effect": "~56.0.4",
     "expo-image": "~56.0.11",
@@ -21,6 +25,8 @@
     "react-dom": "19.2.3",
     "react-native": "0.85.3",
     "react-native-gesture-handler": "~2.31.1",
+    "react-native-nitro-google-signin": "^0.7.0",
+    "react-native-nitro-modules": "^0.35.9",
     "react-native-reanimated": "4.3.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
@@ -29,6 +35,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~56.0.4",
     "typescript": "~6.0.3"
   },
   "scripts": {

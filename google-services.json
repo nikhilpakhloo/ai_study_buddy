@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "375936181772",
+    "project_id": "rag-ai-2f004",
+    "storage_bucket": "rag-ai-2f004.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:375936181772:android:8c8d77f43de5ea422b7029",
+        "android_client_info": {
+          "package_name": "com.anonymous.aistudybuddy"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "375936181772-063upktcgoj4omkrqq8huneho24vl97e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.anonymous.aistudybuddy",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "375936181772-4hvv9q4at3i66bvb30kp4btsfsif6mnd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmVI_Cc0WUaiRCogk2l9IZRrsDHamGqac"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "375936181772-4hvv9q4at3i66bvb30kp4btsfsif6mnd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

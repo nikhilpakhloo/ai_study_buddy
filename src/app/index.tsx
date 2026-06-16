@@ -1,17 +1,10 @@
-import { Text, View, StyleSheet } from "react-native";
+import { Redirect } from "expo-router";
 
-export default function Index() {
-  return (
-    <View style={styles.container}>
-      <Text>Edit src/app/index.tsx to edit this screen.</Text>
-    </View>
-  );
+import { ROUTES } from "@/constants/routes";
+import { useAuthSession } from "@/providers/auth-session-provider";
+
+export default function IndexScreen() {
+  const { user } = useAuthSession();
+
+  return <Redirect href={user ? ROUTES.home : ROUTES.welcome} />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
