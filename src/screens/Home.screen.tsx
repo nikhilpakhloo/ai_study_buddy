@@ -29,10 +29,6 @@ import {
 } from "@/services/chat-queries";
 import { useChatStore } from "@/stores/chat-store";
 
-type VisibleConversationMessage = ConversationMessage & {
-  canRemoveDocument?: boolean;
-};
-
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -62,6 +58,12 @@ function getDisplayText(value: unknown): string {
   );
 }
 
+function waitForNextFrame() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
 export default function HomeScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const [isPickingDocument, setIsPickingDocument] = useState(false);
@@ -82,13 +84,12 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
   const serverMessages = conversationMessagesQuery.data ?? [];
-  const visibleServerMessages = serverMessages.map<VisibleConversationMessage>(
+  const visibleServerMessages = serverMessages.map<ConversationMessage>(
     (bubble) => ({ ...bubble }),
   );
   const uploadedDocumentMessages = chatBubbles
     .filter((bubble) => bubble.document)
-    .map<VisibleConversationMessage>((bubble) => ({
-      canRemoveDocument: true,
+    .map<ConversationMessage>((bubble) => ({
       documentName: bubble.document?.name ?? null,
       id: bubble.id,
       role: "user",
@@ -96,7 +97,7 @@ export default function HomeScreen() {
     }));
   const visibleMessages =
     (visibleServerMessages.length > 0
-      ? [...visibleServerMessages, ...uploadedDocumentMessages]
+      ? [...uploadedDocumentMessages, ...visibleServerMessages]
       : uploadedDocumentMessages).map((bubble) => ({
         ...bubble,
         text: getDisplayText(bubble.text),
@@ -116,15 +117,6 @@ export default function HomeScreen() {
       scrollViewRef.current?.scrollToEnd({ animated });
     });
   }, []);
-
-  const handleRemoveUploadedDocument = useCallback(
-    (documentMessageId: string) => {
-      setChatBubbles((currentBubbles) =>
-        currentBubbles.filter((bubble) => bubble.id !== documentMessageId),
-      );
-    },
-    [setChatBubbles],
-  );
 
   useEffect(() => {
     if (visibleMessages.length > 0 && !conversationMessagesQuery.isLoading) {
@@ -211,6 +203,8 @@ export default function HomeScreen() {
             text: document.name,
           },
         ]);
+        scrollToLatestMessage();
+        await waitForNextFrame();
       }
 
       if (trimmedMessage) {
@@ -281,24 +275,6 @@ export default function HomeScreen() {
                         </Text>
                         <Text style={styles.attachmentMeta}>PDF</Text>
                       </View>
-                      {bubble.canRemoveDocument ? (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Remove uploaded document"
-                          hitSlop={SPACING.sm}
-                          onPress={() => handleRemoveUploadedDocument(bubble.id)}
-                          style={({ pressed }) => [
-                            styles.attachmentRemove,
-                            pressed && styles.pressed,
-                          ]}
-                        >
-                          <SymbolView
-                            name={APP_STRINGS.symbols.close}
-                            size={LAYOUT.composerSmallIconSize}
-                            tintColor={COLORS.textSecondary}
-                          />
-                        </Pressable>
-                      ) : null}
                     </View>
                   ) : null}
                   {bubble.text && bubble.text !== bubble.documentName ? (
@@ -512,13 +488,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: TYPOGRAPHY.legal,
     fontWeight: "700",
-  },
-  attachmentRemove: {
-    width: LAYOUT.drawerHeaderActionSize,
-    height: LAYOUT.drawerHeaderActionSize,
-    borderRadius: RADII.pill,
-    alignItems: "center",
-    justifyContent: "center",
   },
   emptyState: {
     width: "100%",
