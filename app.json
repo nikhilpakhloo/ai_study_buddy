@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "ai-study-buddy",
-    "slug": "ai-study-buddy",
+    "name": "RAG Study",
+    "slug": "rag-study",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="assets/images/icon.png" alt="AI Study Buddy app icon" width="120" height="120" />
-  <h1>AI Study Buddy</h1>
+  <img src="assets/images/icon.png" alt="RAG Study app icon" width="120" height="120" />
+  <h1>RAG Study</h1>
   <p>
     <strong>A mobile-first AI study workspace for PDF-grounded learning, chat, and conversation history.</strong>
   </p>
@@ -21,11 +21,14 @@
     |
     <a href="#getting-started">Run Locally</a>
   </p>
+  <video src="demo.mp4" controls width="320">
+    Your browser does not support the video tag.
+  </video>
 </div>
 
 ---
 
-AI Study Buddy is a mobile-first Expo app that turns study material into a guided chat workspace. Students sign in with Google, upload PDF notes or documents, ask questions, and keep conversations organized so every study session can pick up where the last one ended.
+RAG Study is a mobile-first Expo app that turns study material into a guided chat workspace. Students sign in with Google, upload PDF notes or documents, ask questions, and keep conversations organized so every study session can pick up where the last one ended.
 
 Built with Expo SDK 56, Expo Router, Firebase Auth, TanStack Query, Zustand, and a backend API for authenticated chat, conversation history, and document upload.
 
@@ -195,7 +198,7 @@ npm run lint
 
 | Setting | Value |
 | --- | --- |
-| Expo name | `ai-study-buddy` |
+| Expo name | `RAG Study` |
 | Scheme | `aistudybuddy` |
 | Orientation | Portrait |
 | Android package | `com.anonymous.aistudybuddy` |

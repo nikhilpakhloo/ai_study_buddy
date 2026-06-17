@@ -5,7 +5,7 @@ export const APP_STRINGS = {
     description:
       "Organize what you learn, get clear explanations, and keep every study session moving forward.",
     googleButton: "Continue with Google",
-    googleButtonAccessibilityLabel: "Sign in to AI Study Buddy with Google",
+    googleButtonAccessibilityLabel: "Sign in to RAG Study with Google",
     legalPrefix: "By continuing, you agree to keep learning at your own pace.",
     featureFocus: "Focused learning",
     featureAnswers: "Clear answers",
@@ -21,7 +21,7 @@ export const APP_STRINGS = {
     missingBaseUrl: "EXPO_PUBLIC_BASE_URL is not configured",
   },
   drawer: {
-    appName: "AI Study Buddy",
+    appName: "RAG Study",
     home: "Home",
     newChat: "New chat",
     newChatErrorTitle: "Could not start chat",
@@ -45,11 +45,11 @@ export const APP_STRINGS = {
   },
   home: {
     eyebrow: "You are signed in",
-    defaultName: "Study buddy",
+    defaultName: "Study partner",
     welcome: (name: string) => `Welcome, ${name}`,
     description: "Your main study workspace is ready for the next feature.",
     signOut: "Sign out",
-    signOutAccessibilityLabel: "Sign out of AI Study Buddy",
+    signOutAccessibilityLabel: "Sign out of RAG Study",
   },
   symbols: {
     hero: { ios: "brain.head.profile", android: "psychology", web: "psychology" },

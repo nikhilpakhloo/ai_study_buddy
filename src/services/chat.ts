@@ -29,6 +29,7 @@ type GetConversationsResponse =
 
 type ApiMessage = {
   _id?: string;
+  createdAt?: string;
   id?: string;
   answer?: unknown;
   assistantReply?: unknown;
@@ -50,6 +51,8 @@ type ApiMessage = {
   sender?: string;
   text?: unknown;
   title?: unknown;
+  timestamp?: string;
+  updatedAt?: string;
 };
 
 type GetConversationMessagesResponse =
@@ -84,15 +87,41 @@ export type Conversation = {
 };
 
 export type ConversationMessage = {
+  createdAt?: string;
   documentName: string | null;
   id: string;
+  isError?: boolean;
   role: "assistant" | "user";
+  sources?: unknown[];
   text: string;
 };
 
 export type SendMessagePayload = {
   conversationId: string;
   message: string;
+};
+
+type StreamChatMessagePayload = SendMessagePayload & {
+  onDone?: (data: StreamDoneEvent) => void;
+  onError?: (data: StreamErrorEvent) => void;
+  onStart?: (data: StreamStartEvent) => void;
+  onToken?: (token: string) => void;
+};
+
+type StreamStartEvent = {
+  success?: boolean;
+  userMessage?: unknown;
+};
+
+type StreamDoneEvent = {
+  reply?: string;
+  sources?: unknown[];
+  success?: boolean;
+};
+
+type StreamErrorEvent = {
+  message?: string;
+  success?: boolean;
 };
 
 export type UploadDocumentPayload = {
@@ -142,6 +171,14 @@ function extractMessageText(value: unknown, depth = 0): string | null {
   return null;
 }
 
+function getObjectIdCreatedAt(id?: string) {
+  if (!id || !/^[a-f\d]{24}$/i.test(id)) {
+    return undefined;
+  }
+
+  return new Date(parseInt(id.slice(0, 8), 16) * 1000).toISOString();
+}
+
 function normalizeApiMessage(
   message: ApiMessage,
   fallbackId: string,
@@ -149,11 +186,18 @@ function normalizeApiMessage(
 ): ConversationMessage {
   const role = message.role ?? message.sender;
   const document = message.document ?? message.file;
+  const id = message._id ?? message.id ?? fallbackId;
+  const createdAt =
+    message.createdAt ??
+    message.timestamp ??
+    message.updatedAt ??
+    getObjectIdCreatedAt(id);
 
   return {
+    createdAt,
     documentName:
       document?.name ?? document?.originalName ?? document?.fileName ?? null,
-    id: message._id ?? message.id ?? fallbackId,
+    id,
     role: role === "assistant" || role === "user" ? role : fallbackRole,
     text: extractMessageText(message) ?? "",
   };
@@ -163,6 +207,7 @@ function getResponseMessages(response: SendMessageResponse) {
   if (typeof response === "string") {
     return [
       {
+        createdAt: new Date().toISOString(),
         documentName: null,
         id: `assistant-${Date.now()}`,
         role: "assistant" as const,
@@ -238,6 +283,7 @@ function getResponseMessages(response: SendMessageResponse) {
     ? [
         {
           documentName: null,
+          createdAt: new Date().toISOString(),
           id: `assistant-${Date.now()}`,
           role: "assistant" as const,
           text: assistantText,
@@ -294,6 +340,118 @@ export async function sendChatMessage({ conversationId, message }: SendMessagePa
   });
 
   return getResponseMessages(response.data);
+}
+
+function getStreamChatUrl() {
+  const baseURL = apiClient.defaults.baseURL;
+
+  if (!baseURL) {
+    throw new Error(APP_STRINGS.api.missingBaseUrl);
+  }
+
+  return `${baseURL.replace(/\/$/, "")}/${API_ENDPOINTS.home.streamMessage}`;
+}
+
+function parseSseBlock(block: string) {
+  const event = block.match(/^event:\s*(.+)$/m)?.[1]?.trim();
+  const dataRaw = block
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.replace(/^data:\s?/, ""))
+    .join("\n");
+
+  if (!event || !dataRaw) {
+    return null;
+  }
+
+  return {
+    event,
+    data: JSON.parse(dataRaw) as unknown,
+  };
+}
+
+export async function streamChatMessage({
+  conversationId,
+  message,
+  onDone,
+  onError,
+  onStart,
+  onToken,
+}: StreamChatMessagePayload) {
+  const user = getAuth().currentUser;
+
+  if (!user) {
+    throw new Error(APP_STRINGS.auth.authenticationRequired);
+  }
+
+  const idToken = await getIdToken(user);
+  const response = await fetch(getStreamChatUrl(), {
+    body: JSON.stringify({ conversationId, message }),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+    },
+    method: "POST",
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error("Failed to start chat stream");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const processBlock = (block: string) => {
+    const parsedBlock = parseSseBlock(block);
+
+    if (!parsedBlock) {
+      return;
+    }
+
+    if (parsedBlock.event === "start") {
+      onStart?.(parsedBlock.data as StreamStartEvent);
+    }
+
+    if (parsedBlock.event === "token") {
+      const data = parsedBlock.data as { token?: unknown };
+
+      if (typeof data.token === "string") {
+        onToken?.(data.token);
+      }
+    }
+
+    if (parsedBlock.event === "done") {
+      onDone?.(parsedBlock.data as StreamDoneEvent);
+    }
+
+    if (parsedBlock.event === "error") {
+      onError?.(parsedBlock.data as StreamErrorEvent);
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || "";
+
+    for (const block of blocks) {
+      processBlock(block);
+    }
+  }
+
+  buffer += decoder.decode();
+
+  if (buffer.trim()) {
+    processBlock(buffer);
+  }
 }
 
 export async function uploadDocument({ document }: UploadDocumentPayload) {

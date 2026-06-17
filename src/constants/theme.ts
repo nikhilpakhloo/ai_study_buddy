@@ -14,6 +14,7 @@ export const COLORS = {
   textPrimary: "#17162B",
   textSecondary: "#67647A",
   border: "#E5E3F2",
+  error: "#C2413B",
   googleBlue: "#4285F4",
   shadow: "#29215C",
   transparent: "transparent",

@@ -1,5 +1,6 @@
 import * as DocumentPicker from "expo-document-picker";
 import { SymbolView } from "expo-symbols";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -21,10 +22,11 @@ import { APP_STRINGS } from "@/constants/strings";
 import { COLORS, LAYOUT, RADII, SPACING, TYPOGRAPHY } from "@/constants/theme";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import type { ConversationMessage } from "@/services/chat";
+import { streamChatMessage } from "@/services/chat";
 import {
+  chatQueryKeys,
   useConversationMessagesQuery,
   useCreateConversationMutation,
-  useSendChatMessageMutation,
   useUploadDocumentMutation,
 } from "@/services/chat-queries";
 import { useChatStore } from "@/stores/chat-store";
@@ -64,9 +66,28 @@ function waitForNextFrame() {
   });
 }
 
+function getMessageTime(createdAt?: string) {
+  if (!createdAt) {
+    return "";
+  }
+
+  const date = new Date(createdAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function HomeScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const [isPickingDocument, setIsPickingDocument] = useState(false);
+  const [isStreamingMessage, setIsStreamingMessage] = useState(false);
+  const queryClient = useQueryClient();
   const chatBubbles = useChatStore((state) => state.chatBubbles);
   const conversationId = useChatStore((state) => state.conversationId);
   const document = useChatStore((state) => state.document);
@@ -78,7 +99,6 @@ export default function HomeScreen() {
   const createConversationMutation = useCreateConversationMutation();
   const conversationMessagesQuery =
     useConversationMessagesQuery(conversationId);
-  const sendMessageMutation = useSendChatMessageMutation();
   const uploadDocumentMutation = useUploadDocumentMutation();
   const keyboard = useKeyboard();
   const insets = useSafeAreaInsets();
@@ -90,22 +110,42 @@ export default function HomeScreen() {
   const uploadedDocumentMessages = chatBubbles
     .filter((bubble) => bubble.document)
     .map<ConversationMessage>((bubble) => ({
+      createdAt: bubble.createdAt,
       documentName: bubble.document?.name ?? null,
       id: bubble.id,
       role: "user",
       text: bubble.text || bubble.document?.name || "",
     }));
   const visibleMessages =
-    (visibleServerMessages.length > 0
-      ? [...uploadedDocumentMessages, ...visibleServerMessages]
-      : uploadedDocumentMessages).map((bubble) => ({
+    [...visibleServerMessages, ...uploadedDocumentMessages]
+      .map((bubble) => ({
         ...bubble,
         text: getDisplayText(bubble.text),
-      }));
+      }))
+      .filter(
+        (bubble) =>
+          bubble.role !== "assistant" ||
+          Boolean(bubble.text || bubble.isError || bubble.documentName),
+      )
+      .map((bubble, index) => ({ ...bubble, timelineIndex: index }))
+      .sort((firstBubble, secondBubble) => {
+        const firstTime = firstBubble.createdAt
+          ? new Date(firstBubble.createdAt).getTime()
+          : Number.NaN;
+        const secondTime = secondBubble.createdAt
+          ? new Date(secondBubble.createdAt).getTime()
+          : Number.NaN;
+
+        if (Number.isNaN(firstTime) || Number.isNaN(secondTime)) {
+          return firstBubble.timelineIndex - secondBubble.timelineIndex;
+        }
+
+        return firstTime - secondTime;
+      });
   const trimmedMessage = message.trim();
   const isSending =
     createConversationMutation.isPending ||
-    sendMessageMutation.isPending ||
+    isStreamingMessage ||
     uploadDocumentMutation.isPending;
   const canSend = Boolean((trimmedMessage || document) && !isSending);
   const keyboardOffset = keyboard.isVisible
@@ -168,6 +208,8 @@ export default function HomeScreen() {
     }
 
     Keyboard.dismiss();
+    let pendingAssistantMessageId: string | null = null;
+    let pendingConversationId: string | null = null;
 
     try {
       console.log("[sendMessage] start", {
@@ -188,7 +230,11 @@ export default function HomeScreen() {
         setConversationId(activeConversationId);
       }
 
+      pendingConversationId = activeConversationId;
+
       if (document) {
+        const documentSentAt = new Date().toISOString();
+
         console.log("[sendMessage] uploading document", {
           name: document.name,
           mimeType: document.mimeType,
@@ -198,6 +244,7 @@ export default function HomeScreen() {
         setChatBubbles((currentBubbles) => [
           ...currentBubbles,
           {
+            createdAt: documentSentAt,
             id: `document-${Date.now()}`,
             document,
             text: document.name,
@@ -208,21 +255,126 @@ export default function HomeScreen() {
       }
 
       if (trimmedMessage) {
+        const userMessageSentAt = new Date().toISOString();
+        const optimisticUserMessage: ConversationMessage = {
+          createdAt: userMessageSentAt,
+          documentName: null,
+          id: `user-${Date.now()}`,
+          role: "user",
+          text: trimmedMessage,
+        };
+        const assistantMessageId = `assistant-${Date.now()}`;
+        const optimisticAssistantMessage: ConversationMessage = {
+          createdAt: userMessageSentAt,
+          documentName: null,
+          id: assistantMessageId,
+          role: "assistant",
+          text: "",
+        };
+        pendingAssistantMessageId = assistantMessageId;
+
+        queryClient.setQueryData<ConversationMessage[]>(
+          chatQueryKeys.messages(activeConversationId),
+          (currentMessages = []) => [
+            ...currentMessages,
+            optimisticUserMessage,
+            optimisticAssistantMessage,
+          ],
+        );
+        setMessage("");
+        setDocument(null);
+        setIsStreamingMessage(true);
+        scrollToLatestMessage();
+        await waitForNextFrame();
+
         console.log("[sendMessage] sending text message", {
           conversationId: activeConversationId,
         });
-        await sendMessageMutation.mutateAsync({
+        await streamChatMessage({
           conversationId: activeConversationId,
           message: trimmedMessage,
+          onToken: (token) => {
+            queryClient.setQueryData<ConversationMessage[]>(
+              chatQueryKeys.messages(activeConversationId),
+              (currentMessages = []) =>
+                currentMessages.map((currentMessage) =>
+                  currentMessage.id === assistantMessageId
+                    ? {
+                        ...currentMessage,
+                        text: `${currentMessage.text}${token}`,
+                      }
+                    : currentMessage,
+                ),
+            );
+            scrollToLatestMessage(false);
+          },
+          onDone: (data) => {
+            queryClient.setQueryData<ConversationMessage[]>(
+              chatQueryKeys.messages(activeConversationId),
+              (currentMessages = []) =>
+                currentMessages.map((currentMessage) =>
+                  currentMessage.id === assistantMessageId
+                    ? {
+                        ...currentMessage,
+                        sources: Array.isArray(data.sources)
+                          ? data.sources
+                          : undefined,
+                        text: data.reply ?? currentMessage.text,
+                      }
+                    : currentMessage,
+                ),
+            );
+            queryClient.invalidateQueries({
+              queryKey: chatQueryKeys.conversations(),
+            });
+          },
+          onError: (data) => {
+            queryClient.setQueryData<ConversationMessage[]>(
+              chatQueryKeys.messages(activeConversationId),
+              (currentMessages = []) =>
+                currentMessages.map((currentMessage) =>
+                  currentMessage.id === assistantMessageId
+                    ? {
+                        ...currentMessage,
+                        isError: true,
+                        text: data.message ?? APP_STRINGS.chat.sendErrorMessage,
+                      }
+                    : currentMessage,
+                ),
+            );
+          },
+        });
+        queryClient.invalidateQueries({
+          queryKey: chatQueryKeys.messages(activeConversationId),
         });
       }
 
-      setMessage("");
-      setDocument(null);
+      if (!trimmedMessage) {
+        setMessage("");
+        setDocument(null);
+      }
+
       scrollToLatestMessage();
     } catch (error) {
       console.log("[sendMessage] failed", error);
+      if (pendingConversationId && pendingAssistantMessageId) {
+        queryClient.setQueryData<ConversationMessage[]>(
+          chatQueryKeys.messages(pendingConversationId),
+          (currentMessages = []) =>
+            currentMessages.map((currentMessage) =>
+              currentMessage.id === pendingAssistantMessageId
+                ? {
+                    ...currentMessage,
+                    isError: true,
+                    text: getErrorMessage(error),
+                  }
+                : currentMessage,
+            ),
+        );
+      }
       Alert.alert(APP_STRINGS.chat.sendErrorTitle, getErrorMessage(error));
+    } finally {
+      setIsStreamingMessage(false);
     }
   };
 
@@ -284,9 +436,24 @@ export default function HomeScreen() {
                         bubble.role === "assistant"
                           ? styles.assistantBubbleText
                           : styles.userBubbleText,
+                        bubble.role === "assistant" &&
+                          bubble.isError &&
+                          styles.errorBubbleText,
                       ]}
                     >
                       {bubble.text}
+                    </Text>
+                  ) : null}
+                  {bubble.createdAt ? (
+                    <Text
+                      style={[
+                        styles.messageTime,
+                        bubble.role === "assistant"
+                          ? styles.assistantMessageTime
+                          : styles.userMessageTime,
+                      ]}
+                    >
+                      {getMessageTime(bubble.createdAt)}
                     </Text>
                   ) : null}
                 </View>
@@ -452,8 +619,23 @@ const styles = StyleSheet.create({
   assistantBubbleText: {
     color: COLORS.textPrimary,
   },
+  errorBubbleText: {
+    color: COLORS.error,
+  },
   userBubbleText: {
     color: COLORS.surface,
+  },
+  messageTime: {
+    alignSelf: "flex-end",
+    fontSize: TYPOGRAPHY.legal,
+    fontWeight: "700",
+  },
+  assistantMessageTime: {
+    color: COLORS.textSecondary,
+  },
+  userMessageTime: {
+    color: COLORS.surface,
+    opacity: 0.76,
   },
   attachmentCard: {
     width: "100%",

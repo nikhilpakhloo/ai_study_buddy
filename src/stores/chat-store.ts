@@ -2,6 +2,7 @@ import type { DocumentPickerAsset } from "expo-document-picker";
 import { create } from "zustand";
 
 export type ChatBubble = {
+  createdAt?: string;
   id: string;
   document: DocumentPickerAsset | null;
   text: string;
