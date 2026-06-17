@@ -34,6 +34,7 @@ Built with Expo SDK 56, Expo Router, Firebase Auth, TanStack Query, Zustand, and
 <p align="center">
   <img src="assets/sss1.jpeg" alt="RAG Study chat screen" width="280" />
   <img src="assets/sss2.jpeg" alt="RAG Study conversation screen" width="280" />
+  <img src="assets/sss3.jpeg" alt="RAG Study study workspace screen" width="280" />
 </p>
 
 ## What It Does
