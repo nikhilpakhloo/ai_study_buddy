@@ -21,9 +21,6 @@
     |
     <a href="#getting-started">Run Locally</a>
   </p>
-  <video src="demo.mp4" controls width="320">
-    Your browser does not support the video tag.
-  </video>
 </div>
 
 ---
@@ -31,6 +28,10 @@
 RAG Study is a mobile-first Expo app that turns study material into a guided chat workspace. Students sign in with Google, upload PDF notes or documents, ask questions, and keep conversations organized so every study session can pick up where the last one ended.
 
 Built with Expo SDK 56, Expo Router, Firebase Auth, TanStack Query, Zustand, and a backend API for authenticated chat, conversation history, and document upload.
+
+## Demo
+
+[Watch the demo](demo.mp4)
 
 ## What It Does
 
