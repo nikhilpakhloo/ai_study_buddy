@@ -29,9 +29,12 @@ RAG Study is a mobile-first Expo app that turns study material into a guided cha
 
 Built with Expo SDK 56, Expo Router, Firebase Auth, TanStack Query, Zustand, and a backend API for authenticated chat, conversation history, and document upload.
 
-## Demo
+## Screenshots
 
-[Watch the demo](demo.mp4)
+<p align="center">
+  <img src="assets/sss1.jpeg" alt="RAG Study chat screen" width="280" />
+  <img src="assets/sss2.jpeg" alt="RAG Study conversation screen" width="280" />
+</p>
 
 ## What It Does
 
